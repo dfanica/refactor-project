@@ -1,32 +1,32 @@
 <?php
 
 use JournalMedia\Sample\Http\Controller\TagRiverController;
+use PHPUnit\Framework\TestCase;
 
-class TagTest extends PHPUnit_Framework_TestCase 
+class TagTest extends TestCase
 {
+    public function setUp()
+    {
+        if (!defined('DEMO_RESPONSES')) {
+            define('DEMO_RESPONSES', false);
+        }
+    }
+
     public function testTagFetchAPI()
     {
         $tagController = new TagRiverController();
-        $tagController->setTag("google");
-
-        $this->assertTrue( is_array($tagController->fetchAPI()) );
+        $this->assertTrue(is_array($tagController->fetchAPI('/')));
 
         $tagController2 = new TagRiverController();
-        $tagController2->setTag("microsoft");
-
-        $this->assertTrue( is_array($tagController2->fetchAPI()) );
+        $this->assertTrue(is_array($tagController2->fetchAPI('/')));
     }
 
     public function testTagFetchFile()
     {
         $tagController = new TagRiverController();
-        $tagController->setTag("google");
-
-        $this->assertTrue( is_array($tagController->fetchFile()) );
+        $this->assertTrue(is_array($tagController->fetchFile('google')));
 
         $tagController2 = new TagRiverController();
-        $tagController2->setTag("microsoft");
-
-        $this->assertTrue( is_array($tagController2->fetchFile()) );
+        $this->assertTrue(is_array($tagController2->fetchFile('microsoft')));
     }
 }

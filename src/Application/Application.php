@@ -5,10 +5,13 @@ namespace JournalMedia\Sample\Application;
 
 use Dotenv\Dotenv;
 use Illuminate\Container\Container;
+use JournalMedia\Sample\Http\ServiceProvider;
 
 class Application
 {
-    /** @var Container */
+    /**
+     * @var Container
+     */
     private $container;
 
     public function __construct()
@@ -20,7 +23,7 @@ class Application
 
     private function registerServiceProviders(): void
     {
-        (new \JournalMedia\Sample\Http\ServiceProvider)->register($this->container);
+        (new ServiceProvider)->register($this->container);
     }
 
     private function loadEnvironmentVariables(): void

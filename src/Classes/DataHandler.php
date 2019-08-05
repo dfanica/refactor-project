@@ -3,116 +3,129 @@ declare(strict_types=1);
 
 namespace JournalMedia\Sample\Classes;
 
-use Guzzle\Http\Client;
+use GuzzleHttp\Client as GuzzleClient;
+use JournalMedia\Sample\Entity\ArticleEntity;
+use JournalMedia\Sample\Classes\CachingService as Cache;
 
 abstract class DataHandler
 {
-    private $api_url = "http://api.thejournal.ie/v3/sample/";
-    private $username = "sample";
-    private $password = "eferw5wr335£65";
-    private $tag = "";
-    private $id = 0;
+    const DEFAULT_PUBLICATION_NAME = 'thejournal';
 
-    private function _processJSON( $articles ): array
+    private $demoMode;
+    private $apiUrl;
+    private $username;
+    private $password;
+
+    public function __construct()
     {
-        $return_data = array();
+        $this->demoMode = getenv('DEMO_MODE') === 'true' ? true : false;
+        $this->apiUrl = getenv('API_URL');
+        $this->username = getenv('API_USER');
+        $this->password = getenv('API_PASS');
+    }
 
-        foreach($articles as $article):
-            $id = (@$article['id'])?$article['id']:"";
-            $title = (@$article['title'])?$article['title']:"";
-            $excerpt = (@$article['excerpt'])?$article['excerpt']:"";
-            $type = (@$article['type'])?$article['type']:"";
-            $content = (@$article['content'])?$article['content']:"";
-            $tags = (@$article['tags'])?$article['tags']:array();
+    public function getArticleById($id): ArticleEntity
+    {
+        $url = sprintf('%s/article/%d', $this->apiUrl, intval($id));
+        $article = $this->demoMode
+            ? $this->fetchFile(self::DEFAULT_PUBLICATION_NAME, $id)
+            : $this->fetchAPI($url)->response->page_items[0];
+        return $this->articleEntity($article);
+    }
 
-            foreach ($tags as $i => $tag) {
-                $tags[$i] = $tag['slug'];
+    /**
+     * @todo Pagination can be done here
+     */
+    public function getPublication(
+        $name = self::DEFAULT_PUBLICATION_NAME,
+        $page = null
+    ): array
+    {
+        $url = sprintf('%s/sample/%s', $this->apiUrl, $name);
+        // pagination info found here...
+        $articleList = $this->demoMode
+            ? $this->fetchFile($name)
+            : $this->fetchAPI($url)->response->articles;
+        return $this->processArticles($articleList);
+    }
+
+    /**
+     * @todo Pagination can be done here
+     */
+    public function getPublicationByTag($tag, $page = null): array
+    {
+        $url = sprintf('%s/sample/tag/%s', $this->apiUrl, $tag);
+        // pagination info found here...
+        $articleList = $this->demoMode
+            ? $this->fetchFile($tag)
+            : $this->fetchAPI($url)->response->articles;
+        return $this->processArticles($articleList);
+    }
+
+    private function processArticles(array $articles): array
+    {
+        $result = [];
+        foreach ($articles as $article) {
+            if ($article->type === ArticleEntity::ARTICLE_TYPE_POST) {
+                $result[] = $this->articleEntity($article);
             }
-
-            $image = (@$article['images'])?$article['images']['thumbnail']['image']:"";
-
-            if($type === "post"):
-                $return_data[] = array(
-                    "id"=> $id,
-                    "title" => $title,
-                    "excerpt" => $excerpt,
-                    "image" => $image,
-                    "comtent" => $content,
-                    "tags" => $tags
-                );
-            endif;
-        endforeach;
-
-        return $return_data;
+        }
+        return $result;
     }
 
-    public function setTag($tag): string
+    private function articleEntity($article): ArticleEntity
     {
-        return $this->tag = $tag;
+        $tags = [];
+        foreach ((@$article->tags ?? []) as $i => $tag) {
+            $tags[$i] = $tag->slug;
+        }
+        $entity = new ArticleEntity();
+        $entity->setId(@$article->id ?: '');
+        $entity->setTitle(@$article->title ?: '');
+        $entity->setExcerpt(@$article->excerpt ?: '');
+        $entity->setContent(@$article->content ?: '');
+        $entity->setTags($tags);
+        $entity->setImage(@$article->images->thumbnail->image ?: '');
+        return $entity;
     }
 
-    public function setArticle($id): string
+    public function fetchAPI($url)
     {
-        return $this->id = $id;
+        $guzzle = new GuzzleClient();
+        $cache = new Cache();
+        try {
+            $options = ['auth' => [$this->username, $this->password]];
+            // cache the api request for 24 hours
+            if (!($response = $cache->get($url))) {
+                $response = $guzzle->get($url, $options)->getBody()->getContents();
+                $cache->set($response, $url);
+            }
+            return json_decode($response);
+        } catch (\Exception $e) {
+            // do nothing for the moment
+        }
+        return [];
     }
 
-    public function fetchAPI(): array
+    public function fetchFile($filename, $articleId = null)
     {
-        try{
-            $curl_url = ($this->tag) ? $this->api_url . "tag/" . $this->tag : $this->api_url . "thejournal/";
-
-            $guzzle = new Client();
-            $response = $guzzle->get($curl_url, array(), array(
-                "auth" => array($this->username, $this->password, 'Basic')
-            ))->send();
-
-            if($response->isSuccessful()):
-                $json_data = $response->json();
-
-                if(@$json_data['response']['articles'] && count($json_data['response']['articles']) > 0):
-                    $json = $this->_processJSON($json_data['response']['articles']);
-
-                    if ($this->id) {
-                        foreach ($json as $article) {
-                            if ($article['id'] == $this->id) {
-                                return $article;
-                            }
-                        }
-                    }
-
-                    return $json;
-                else:
-                        return array();
-                endif;
-            endif;
-        }catch(Exception $e){}
-
-        return array();
-    }
-
-    public function fetchFile(): array
-    {
-        $file_location = DEMO_RESPONSES . (($this->tag) ? "/".$this->tag.".json" : "/thejournal.json");
-        try{
-            if( file_exists($file_location) ):
-                $json_data = file_get_contents($file_location);
-
-                $json = $this->_processJSON(json_decode($json_data, true));
-
-                if ($this->id) {
-                    foreach ($json as $article) {
-                        if ($article['id'] == $this->id) {
+        $file = DEMO_RESPONSES . "/{$filename}.json";
+        try {
+            if (file_exists($file)) {
+                $data = json_decode(file_get_contents($file));
+                if ($articleId && $articleId > 0) {
+                    foreach ($data as $article) {
+                        if ($article->id == $articleId) {
                             return $article;
                         }
                     }
+                    return null;
                 }
-
-                return $json;
-            else:
-                return array();
-            endif;
-        }catch(Exception $e){}
-
-        return array();
+                return $data;
+            }
+        } catch (\Exception $e) {
+            // do nothing for the moment
+        }
+        return [];
     }
 }

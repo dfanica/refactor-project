@@ -4,11 +4,18 @@
         "illuminate/container": "^5.5",
         "league/route": "^3.0",
         "zendframework/zend-diactoros": "^1.6",
-        "vlucas/phpdotenv": "^2.4"
+        "vlucas/phpdotenv": "^2.4",
+        "predis/predis": "^1.1",
+        "phpFastCache/phpFastCache": "^6.0",
+        "guzzlehttp/guzzle": "~6.0",
+        "jenssegers/blade": "^1.2"
     },
     "autoload": {
         "psr-4": {
             "JournalMedia\\Sample\\": "src/"
         }
+    },
+    "require-dev": {
+        "kint-php/kint": "^3.2"
     }
 }
